@@ -34,7 +34,7 @@ const ContactModal = ({ contact, onSave, onClose }) => {
     if (!form.email) errs.email = 'Email is required';
     // FIX 5b: message must match /invalid email/i
     else if (!/^\S+@\S+\.\S+$/.test(form.email)) errs.email = 'Invalid email address';
-    if (form.phone && !/^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/.test(form.phone)) {
+    if (form.phone && !/^[+]?\(?[0-9]{3}\)?[-\s.]?[0-9]{3}[-\s.]?[0-9]{4,6}$/.test(form.phone))  {
       errs.phone = 'Invalid phone number';
     }
     if (form.notes && form.notes.length > 1000) errs.notes = 'Max 1000 characters';
