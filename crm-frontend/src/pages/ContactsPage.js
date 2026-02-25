@@ -38,7 +38,7 @@ const ContactsPage = () => {
 
   useEffect(() => {
     fetchContacts(page, search, statusFilter);
-  }, [page, statusFilter, fetchContacts]);
+  }, [page, statusFilter, search, fetchContacts]);
 
   const handleSearchChange = (e) => {
     const val = e.target.value;
