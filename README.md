@@ -1,133 +1,152 @@
-# NexusCRM – Full-Stack MERN Mini-CRM Application
+# NexusCRM
 
-> A production-ready CRM built with MongoDB, Express.js, React.js, and Node.js, featuring JWT authentication, role-based access, full contact CRUD, pagination, activity logging, and CSV export.
+A full-stack CRM application built with the MERN stack. Manages contacts through their sales lifecycle — from initial lead to paying customer — with a complete activity audit trail.
+
+Built as part of a technical assessment. The goal was to demonstrate production-grade backend design, clean frontend architecture, and thoughtful decisions around security and data integrity.
 
 ---
 
-## 🏗️ Architecture
+## Live
 
-### Why Monorepo + MVC (Not Microservices)?
+| | URL |
+|---|---|
+| App | https://nexus-crm-kappa.vercel.app |
+| API | https://nexuscrm-backend.onrender.com |
 
-For a Mini-CRM at this scale, a **well-structured monorepo with clean MVC separation** is the industry-preferred choice over microservices. Here's why:
+> The backend runs on Render's free tier, so the first request after a period of inactivity may take 20–30 seconds while the service wakes up. This is expected behaviour on the free plan.
 
-| Concern | Microservices | MVC Monorepo (Chosen) |
-|---|---|---|
-| Team size | 10+ engineers | 1–5 engineers |
-| Deployment complexity | Kubernetes, service mesh | Single Render/Railway deploy |
-| Overhead | API Gateway, service discovery | Minimal |
-| Debugging | Distributed tracing needed | Simple logs |
-| Scale-readiness | Yes (overkill here) | Modular, easy to extract later |
+---
 
-> **Industry context:** Companies like Shopify, GitHub, and Basecamp run critical products as well-structured monoliths. Microservices are adopted when teams and traffic justify the operational cost.
+## Repositories
 
-### Backend Architecture (Node.js + Express + MongoDB)
+- Frontend — https://github.com/SOUMIKBERA/nexus-crm/tree/main/crm-frontend
+- Backend — https://github.com/SOUMIKBERA/nexus-crm/tree/main/crm-backend
+
+---
+
+## What it does
+
+**Auth**
+- Register and login with email + password
+- Passwords hashed with bcrypt (12 rounds)
+- JWT access tokens expire in 15 minutes; refresh tokens last 7 days and rotate on each use
+- Login is rate-limited to 3 attempts per 10 minutes to prevent brute-force
+
+**Contacts**
+- Full create / read / update / delete
+- Each contact has: name, email, phone, company, status (Lead → Prospect → Customer), notes
+- Search by name or email, filter by status, paginated 10 per page
+- Export all contacts to CSV with one click
+
+**Activity log**
+- Every create, update and delete is recorded automatically
+- Shows what changed (field-level diff), who made the change, and when
+- Paginated, available in its own view
+
+---
+
+## Tech choices and why
+
+I want to be upfront about the decisions here rather than just listing libraries.
+
+**Monorepo over microservices** — The scope doesn't justify the operational overhead of microservices. A clean MVC monolith is faster to develop, easier to debug, and straightforward to deploy. The code is structured so individual modules could be extracted later if the team or traffic grows to that point.
+
+**Zustand over Redux** — For an app with one primary shared concern (auth state), Redux adds a lot of ceremony for very little benefit. Zustand gives a clean global store in about 30 lines. I'd reach for Redux Toolkit if the state requirements grew significantly more complex.
+
+**CSS Modules over a utility framework** — Scoped styles with no runtime cost and no class name conflicts. The component styles live next to the components. It's a trade-off — less rapid for prototyping but cleaner for long-term maintenance.
+
+**mongodb-memory-server for backend tests** — Tests run with a real MongoDB instance in memory. No external dependency, no mocking of the ODM layer. Tests are isolated, fast, and can run in CI without any setup.
+
+---
+
+## Project structure
 
 ```
 crm-backend/
 ├── src/
-│   ├── config/          # Database connection
-│   ├── controllers/     # Business logic (auth, contacts, activities)
-│   ├── middleware/       # Auth guard, rate limiter, error handler, validator
-│   ├── models/          # Mongoose schemas (User, Contact, Activity)
-│   ├── routes/          # Express routers
-│   └── utils/           # JWT helpers, Logger, ApiError class
-└── tests/               # Jest + Supertest integration tests
-```
+│   ├── config/          # MongoDB connection setup
+│   ├── controllers/     # Request handlers — auth, contacts, activities
+│   ├── middleware/       # JWT auth, rate limiter, error handler, input validator
+│   ├── models/          # Mongoose schemas — User, Contact, Activity
+│   ├── routes/          # Express route definitions
+│   └── utils/           # Token helpers, Winston logger, custom error class
+└── tests/
+    ├── auth.test.js      # 13 integration tests
+    └── contacts.test.js  # 16 integration tests
 
-**Design Patterns used:**
-- **MVC (Model-View-Controller)** — clean separation of concerns
-- **Repository pattern** — Mongoose models abstract DB operations
-- **Middleware chain** — composable request pipeline
-- **Centralized error handling** — single error handler, operational vs programmer errors
-- **Token Rotation** — refresh token stored server-side, rotated on each use
-
-### Frontend Architecture (React 18)
-
-```
 crm-frontend/
-├── public/
 └── src/
     ├── components/
-    │   ├── auth/         # ProtectedRoute HOC
-    │   ├── contacts/     # ContactTable, ContactModal
+    │   ├── auth/         # ProtectedRoute
     │   ├── common/       # Pagination, LoadingSpinner
-    │   └── layout/       # Layout with sidebar nav
+    │   ├── contacts/     # ContactTable, ContactModal
+    │   └── layout/       # Sidebar layout
     ├── pages/            # LoginPage, SignupPage, DashboardPage, ContactsPage, ActivitiesPage
-    ├── services/         # API layer (axios instances + service modules)
-    ├── store/            # Zustand global state (auth)
-    └── styles/           # CSS modules + global variables
+    ├── services/         # Axios instance + API service modules
+    ├── store/            # Zustand auth store
+    └── styles/           # Global CSS variables and resets
 ```
-
-**Key frontend patterns:**
-- **Zustand** — lightweight, unopinionated state management (preferred over Redux for smaller apps)
-- **CSS Modules** — scoped styles, no class name collisions
-- **Axios interceptors** — automatic token injection + silent token refresh
-- **Debounced search** — 400ms debounce prevents excessive API calls
-- **Protected Routes** — HOC pattern using React Router v6 outlet
-
-### Security Architecture
-
-```
-Request → Rate Limiter → CORS → Helmet → JWT Auth → NoSQL Sanitize → Controller
-```
-
-- **Helmet.js** — HTTP security headers (CSP, HSTS, etc.)
-- **express-mongo-sanitize** — prevents NoSQL injection attacks
-- **bcryptjs (12 rounds)** — password hashing
-- **JWT Access Token (15m) + Refresh Token (7d)** — short-lived access, rotating refresh
-- **Rate limiting** — 3 login attempts per 10 minutes
-- **Input validation** — express-validator on all endpoints
 
 ---
 
-## 🚀 Live Deployment
+## Running locally
 
-| Service | URL |
-|---|---|
-| **Frontend** | `https://your-app.vercel.app` |
-| **Backend API** | `https://your-api.railway.app` |
-| **API Docs** | `https://your-api.railway.app/api-docs` |
+### Requirements
 
----
+- Node.js 18 or higher
+- A MongoDB Atlas cluster (free tier is fine) or local MongoDB
 
-## 📦 Local Setup
-
-### Prerequisites
-- Node.js 18+
-- MongoDB Atlas account (free tier) OR local MongoDB
-- Git
-
-### Backend Setup
+### Backend
 
 ```bash
-# 1. Clone and enter backend
 cd crm-backend
-
-# 2. Install dependencies
 npm install
-
-# 3. Create environment file
 cp .env.example .env
-# Edit .env with your values
-
-# 4. Start development server
+# Fill in the values — see section below
 npm run dev
-# Server runs on http://localhost:5000
-
-# 5. Run tests
-npm test
-
-# 6. Run tests with coverage
-npm run test -- --coverage
 ```
 
-### Required `.env` Variables (Backend)
+Server starts at `http://localhost:5000`. You should see:
+
+```
+✅ MongoDB Connected
+🚀 Server running on port 5000 [development]
+```
+
+### Frontend
+
+```bash
+cd crm-frontend
+npm install
+# Create a .env file with one line:
+echo "REACT_APP_API_URL=http://localhost:5000/api" > .env
+npm start
+```
+
+App opens at `http://localhost:3000`.
+
+### Running tests
+
+```bash
+# Backend — 29 tests
+cd crm-backend && npm test
+
+# Frontend — 15 tests  
+cd crm-frontend && npm test -- --watchAll=false
+```
+
+---
+
+## Environment variables
+
+### Backend (`crm-backend/.env`)
+
 ```env
 PORT=5000
 NODE_ENV=development
-MONGO_URI=
-JWT_SECRET=
-JWT_REFRESH_SECRET=
+MONGO_URI=mongodb+srv://<user>:<password>@cluster0.xxxxx.mongodb.net/crm_db?retryWrites=true&w=majority
+JWT_SECRET=<at-least-32-random-characters>
+JWT_REFRESH_SECRET=<different-32-random-characters>
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 RATE_LIMIT_WINDOW_MS=600000
@@ -135,298 +154,164 @@ RATE_LIMIT_MAX=3
 CLIENT_URL=http://localhost:3000
 ```
 
-### Frontend Setup
-
+To generate the JWT secrets, run this in your terminal:
 ```bash
-# 1. Enter frontend
-cd crm-frontend
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+Run it twice and use different values for each secret.
 
-# 2. Install dependencies
-npm install
+### Frontend (`crm-frontend/.env`)
 
-# 3. Create environment file
-echo "REACT_APP_API_URL=http://localhost:5000/api" > .env
+```env
+REACT_APP_API_URL=http://localhost:5000/api
+```
 
-# 4. Start development server
-npm start
-# App runs on http://localhost:3000
+Change this to your deployed backend URL when deploying.
 
-# 5. Run tests
-npm test
+---
+
+## API reference
+
+Base URL: `http://localhost:5000/api`
+
+**Auth**
+
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| POST | `/auth/signup` | — | name, email, password |
+| POST | `/auth/login` | — | Rate limited: 3 attempts / 10 min |
+| POST | `/auth/refresh` | — | Sends refresh token, gets new pair |
+| POST | `/auth/logout` | ✓ | Invalidates refresh token in DB |
+| GET | `/auth/me` | ✓ | Returns current user |
+
+**Contacts**
+
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| GET | `/contacts` | ✓ | `?page=1&limit=10&search=&status=` |
+| GET | `/contacts/:id` | ✓ | |
+| POST | `/contacts` | ✓ | |
+| PUT | `/contacts/:id` | ✓ | |
+| DELETE | `/contacts/:id` | ✓ | |
+| GET | `/contacts/export` | ✓ | Returns CSV file |
+
+**Activities**
+
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| GET | `/activities` | ✓ | `?page=1&limit=20` |
+
+**Other**
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/health` | No auth, returns server status |
+
+**Standard response envelope:**
+```json
+{
+  "success": true,
+  "message": "...",
+  "data": { ... }
+}
+```
+
+**Error responses follow the same shape:**
+```json
+{
+  "success": false,
+  "message": "Invalid email or password"
+}
+```
+
+**Status codes used:** 200, 201, 401, 403, 404, 409 (duplicate email), 422 (validation), 429 (rate limit), 500
+
+---
+
+## Database schemas
+
+**User**
+```
+name         String   required, 2–50 chars
+email        String   unique, validated
+password     String   bcrypt hashed, never returned in responses
+role         String   "user" | "admin", default "user"
+refreshToken String   stored on login, cleared on logout
+isActive     Boolean  default true
+lastLogin    Date
+```
+
+**Contact**
+```
+name         String   required, 2–100 chars
+email        String   required, validated, unique per user
+phone        String   regex validated if provided
+company      String
+status       String   "Lead" | "Prospect" | "Customer"
+notes        String   max 1000 chars
+createdBy    ObjectId ref User — contacts are user-scoped
+
+Indexes:
+  { createdBy: 1, createdAt: -1 }   — main listing query
+  { name: "text", email: "text" }   — search
+```
+
+**Activity**
+```
+action       String   "CREATE" | "UPDATE" | "DELETE"
+entity       String   "Contact"
+entityId     ObjectId
+entityName   String   denormalized for display after deletion
+performedBy  ObjectId ref User
+changes      Mixed    field-level diff { field: { from, to } }
 ```
 
 ---
 
-## 🌐 Deployment Guide
+## Deployment
 
-### Option A: Render.com (Backend) + Vercel (Frontend) — Recommended
+The production setup uses Render for the backend and Vercel for the frontend. Both connect directly to GitHub and deploy on push to main.
 
 **Backend on Render:**
-1. Create account at render.com
-2. New Web Service → Connect GitHub repo (crm-backend)
-3. Build command: `npm install`
-4. Start command: `node src/server.js`
-5. Add all environment variables in Render dashboard
-6. Deploy
+1. New Web Service → connect the backend repo
+2. Build command: `npm install`
+3. Start command: `node src/server.js`
+4. Add all env variables from the list above (use production values)
+5. Set `NODE_ENV=production` and `PORT=10000`
 
 **Frontend on Vercel:**
-1. Create account at vercel.com
-2. Import GitHub repo (crm-frontend)
-3. Add env variable: `REACT_APP_API_URL=https://your-render-api-url/api`
+1. Import the frontend repo
+2. Framework preset: Create React App (auto-detected)
+3. Add env variable: `REACT_APP_API_URL=https://your-render-url.onrender.com/api`
 4. Deploy
 
-### Option B: Railway (Full Stack)
+After both are live, update `CLIENT_URL` in your Render environment to the Vercel URL, so CORS is configured correctly.
 
+**Docker (optional, for self-hosting):**
 ```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Login and deploy
-railway login
-railway init
-railway up
-```
-
-### Option C: Docker (Self-hosted)
-
-```bash
-# Clone both repos into same directory
-# Create .env file with production values
-
-# Build and run
 docker-compose up --build -d
-
-# Frontend: http://localhost:3000
-# Backend: http://localhost:5000
+# Frontend at :3000, Backend at :5000
 ```
 
 ---
 
-## 📡 API Documentation
+## Security
 
-### Base URL: `http://localhost:5000/api`
-
-### Authentication Endpoints
-
-| Method | Endpoint | Auth Required | Description |
-|--------|----------|---------------|-------------|
-| POST | `/auth/signup` | No | Register new user |
-| POST | `/auth/login` | No | Login (rate limited: 3/10min) |
-| POST | `/auth/refresh` | No | Refresh access token |
-| POST | `/auth/logout` | Yes | Logout user |
-| GET | `/auth/me` | Yes | Get current user |
-
-**Signup Request:**
-```json
-{
-  "name": "Jane Smith",
-  "email": "jane@example.com",
-  "password": "SecurePass123"
-}
-```
-
-**Login Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "user": { "_id": "...", "name": "Jane Smith", "email": "...", "role": "user" },
-    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiJ9..."
-  }
-}
-```
-
-### Contact Endpoints
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/contacts` | Yes | Get contacts (paginated, searchable) |
-| GET | `/contacts/:id` | Yes | Get single contact |
-| POST | `/contacts` | Yes | Create contact |
-| PUT | `/contacts/:id` | Yes | Update contact |
-| DELETE | `/contacts/:id` | Yes | Delete contact |
-| GET | `/contacts/export` | Yes | Export as CSV |
-
-**GET /contacts Query Parameters:**
-```
-?page=1&limit=10&search=john&status=Lead&sortBy=createdAt&order=desc
-```
-
-**Create Contact Request:**
-```json
-{
-  "name": "John Doe",
-  "email": "john@acme.com",
-  "phone": "1234567890",
-  "company": "Acme Corp",
-  "status": "Lead",
-  "notes": "Interested in enterprise plan"
-}
-```
-
-**Paginated Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "contacts": [...],
-    "pagination": {
-      "currentPage": 1,
-      "totalPages": 5,
-      "totalContacts": 47,
-      "hasNextPage": true,
-      "hasPrevPage": false,
-      "limit": 10
-    }
-  }
-}
-```
-
-### Activity Endpoints
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/activities` | Yes | Get activity log (paginated) |
-
-### HTTP Status Codes
-
-| Code | Meaning |
-|------|---------|
-| 200 | Success |
-| 201 | Created |
-| 401 | Unauthorized (invalid/expired token) |
-| 403 | Forbidden (insufficient role) |
-| 404 | Not found |
-| 409 | Conflict (duplicate email) |
-| 422 | Validation error |
-| 429 | Too many requests (rate limited) |
-| 500 | Internal server error |
+- HTTP headers hardened with Helmet (CSP, HSTS, X-Frame-Options, etc.)
+- Request bodies sanitized with express-mongo-sanitize before hitting any query
+- Passwords never stored in plaintext; bcrypt with cost factor 12
+- Access tokens are short-lived (15 min); compromise window is narrow
+- Refresh tokens are stored in the database and rotated on every use — a stolen token becomes invalid after the legitimate user refreshes
+- Login endpoint rate-limited independently from the global limiter
+- All user input validated with express-validator before reaching controllers
+- CORS configured to accept requests only from the known frontend origin
 
 ---
 
-## ✅ Features Checklist
+## Known limitations
 
-### Authentication
-- [x] User Signup with validation
-- [x] User Login with bcrypt password comparison
-- [x] JWT Access Token (15min) + Refresh Token (7 days)
-- [x] Token rotation on refresh
-- [x] Login rate limiting (3 requests per 10 min)
-- [x] Protected backend routes (middleware)
-- [x] Protected frontend routes (React Router)
-- [x] Auto token refresh via Axios interceptors
-- [x] Role-based access (Admin / User)
-
-### Contact CRM
-- [x] Full CRUD (Create, Read, Update, Delete)
-- [x] Fields: Name, Email, Phone, Company, Status, Notes, CreatedAt/UpdatedAt
-- [x] Status: Lead / Prospect / Customer
-- [x] Search by name or email (debounced)
-- [x] Filter by status
-- [x] Pagination (10 per page)
-- [x] CSV export
-- [x] Activity log (add/edit/delete events)
-
-### Technical Quality
-- [x] Backend: MVC folder structure
-- [x] Input validation (express-validator)
-- [x] Global error handler with correct HTTP codes
-- [x] MongoDB indexes for performance
-- [x] Mongoose schema validation
-- [x] NoSQL injection protection
-- [x] Security headers (Helmet)
-- [x] Backend unit/integration tests (Jest + Supertest)
-- [x] Frontend unit tests (React Testing Library)
-- [x] Responsive UI (mobile-friendly)
-- [x] Form validation (frontend)
-- [x] Docker containerization
-- [x] Production-ready nginx config
+- Refresh tokens are stored in a single field on the User document. In a multi-device scenario, only one active session is supported per user at a time. A proper implementation would use a separate tokens collection with one entry per device.
+- The free Render instance sleeps after inactivity. Not suitable for production traffic.
+- No email verification on signup. Adding a verification step would be the next obvious improvement to the auth flow.
 
 ---
-
-## 🧪 Test Coverage
-
-### Backend Tests (`crm-backend/tests/`)
-- `auth.test.js` — 13 tests covering signup, login, refresh, logout, /me
-- `contacts.test.js` — 16 tests covering all CRUD, search, filter, export, auth guards
-
-### Frontend Tests (`crm-frontend/src/`)
-- `ContactModal.test.js` — 8 tests covering add/edit mode, validation
-- `Pagination.test.js` — 7 tests covering navigation, disabled states
-
-```bash
-# Run backend tests
-cd crm-backend && npm test
-
-# Run frontend tests
-cd crm-frontend && npm test
-```
-
----
-
-## 📐 Database Schema
-
-### User
-```javascript
-{
-  name: String (2-50 chars),
-  email: String (unique, validated),
-  password: String (hashed, bcrypt 12 rounds),
-  role: "admin" | "user",
-  refreshToken: String,
-  isActive: Boolean,
-  lastLogin: Date,
-  timestamps: true
-}
-```
-
-### Contact
-```javascript
-{
-  name: String (2-100 chars),
-  email: String (validated),
-  phone: String (regex validated),
-  company: String,
-  status: "Lead" | "Prospect" | "Customer",
-  notes: String (max 1000),
-  createdBy: ObjectId (ref: User),
-  timestamps: true,
-  indexes: [createdBy+createdAt, text(name+email)]
-}
-```
-
-### Activity
-```javascript
-{
-  action: "CREATE" | "UPDATE" | "DELETE",
-  entity: String,
-  entityId: ObjectId,
-  entityName: String,
-  performedBy: ObjectId (ref: User),
-  changes: Mixed,
-  timestamps: true
-}
-```
-
----
-
-## 🔧 Tech Stack
-
-| Layer | Technology | Reason |
-|-------|-----------|--------|
-| Frontend | React 18 | Industry standard, rich ecosystem |
-| State Management | Zustand | Lightweight, no boilerplate |
-| Routing | React Router v6 | Latest stable, file-less routes |
-| HTTP Client | Axios | Interceptors, error handling |
-| Styling | CSS Modules | Scoped, no runtime overhead |
-| Backend | Node.js + Express | Non-blocking I/O, REST-friendly |
-| Database | MongoDB + Mongoose | Flexible schema, JSON-native |
-| Auth | JWT + bcryptjs | Stateless, industry standard |
-| Validation | express-validator | Declarative, chainable |
-| Rate Limiting | express-rate-limit | Configurable, memory store |
-| Logging | Winston | Structured logs, multiple transports |
-| Security | Helmet + mongo-sanitize | Defense in depth |
-| Testing (BE) | Jest + Supertest + mongodb-memory-server | No external DB needed |
-| Testing (FE) | React Testing Library | Testing as user, not implementation |
-| Containerization | Docker + nginx | Reproducible deployments |
