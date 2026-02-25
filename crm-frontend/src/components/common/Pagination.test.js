@@ -1,9 +1,10 @@
+import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import Pagination from './components/shared/Pagination';
+import '@testing-library/jest-dom';
+import Pagination from './Pagination';
 
 describe('Pagination Component', () => {
   const mockOnPageChange = jest.fn();
-
   beforeEach(() => { mockOnPageChange.mockClear(); });
 
   it('renders without crashing', () => {

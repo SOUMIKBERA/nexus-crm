@@ -1,6 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import ContactModal from './components/contacts/ContactModal';
+import React from 'react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import ContactModal from './ContactModal';
 
 describe('ContactModal Component', () => {
   const mockOnSave = jest.fn();
@@ -11,11 +12,9 @@ describe('ContactModal Component', () => {
     mockOnClose.mockClear();
   });
 
-  const renderModal = (contact = null) => {
-    return render(
-      <ContactModal contact={contact} onSave={mockOnSave} onClose={mockOnClose} />
-    );
-  };
+  const renderModal = (contact = null) => render(
+    <ContactModal contact={contact} onSave={mockOnSave} onClose={mockOnClose} />
+  );
 
   it('renders Add Contact modal when no contact provided', () => {
     renderModal();
@@ -24,14 +23,12 @@ describe('ContactModal Component', () => {
   });
 
   it('renders Edit Contact modal when contact provided', () => {
-    const contact = { _id: '1', name: 'Test User', email: 'test@test.com', status: 'Lead' };
-    renderModal(contact);
+    renderModal({ _id: '1', name: 'Test User', email: 'test@test.com', status: 'Lead' });
     expect(screen.getByText('Edit Contact')).toBeInTheDocument();
   });
 
   it('prefills form fields when editing', () => {
-    const contact = { _id: '1', name: 'John Doe', email: 'john@test.com', phone: '1234567890', company: 'Acme', status: 'Prospect', notes: 'Test note' };
-    renderModal(contact);
+    renderModal({ _id: '1', name: 'John Doe', email: 'john@test.com', phone: '1234567890', company: 'Acme', status: 'Prospect', notes: 'Test note' });
     expect(screen.getByDisplayValue('John Doe')).toBeInTheDocument();
     expect(screen.getByDisplayValue('john@test.com')).toBeInTheDocument();
     expect(screen.getByDisplayValue('1234567890')).toBeInTheDocument();
@@ -40,7 +37,7 @@ describe('ContactModal Component', () => {
 
   it('calls onClose when cancel button clicked', () => {
     renderModal();
-    fireEvent.click(screen.getByText('Cancel'));
+    fireEvent.click(screen.getByText(/Cancel/i));
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
@@ -52,7 +49,7 @@ describe('ContactModal Component', () => {
 
   it('shows validation error when name is empty', async () => {
     renderModal();
-    fireEvent.click(screen.getByText('Add Contact'));
+    await act(async () => { fireEvent.click(screen.getByText(/Create Contact/i)); });
     await waitFor(() => {
       expect(screen.getByText(/name is required/i)).toBeInTheDocument();
     });
@@ -60,8 +57,10 @@ describe('ContactModal Component', () => {
 
   it('shows validation error when email is empty', async () => {
     renderModal();
-    fireEvent.change(screen.getByPlaceholderText('John Doe'), { target: { value: 'Test User' } });
-    fireEvent.click(screen.getByText('Add Contact'));
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('Full name'), { target: { value: 'Jane Doe' } });
+      fireEvent.click(screen.getByText(/Create Contact/i));
+    });
     await waitFor(() => {
       expect(screen.getByText(/email is required/i)).toBeInTheDocument();
     });
@@ -69,9 +68,12 @@ describe('ContactModal Component', () => {
 
   it('shows validation error for invalid email', async () => {
     renderModal();
-    fireEvent.change(screen.getByPlaceholderText('John Doe'), { target: { value: 'Test User' } });
-    fireEvent.change(screen.getByPlaceholderText('john@company.com'), { target: { value: 'not-valid' } });
-    fireEvent.click(screen.getByText('Add Contact'));
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('Full name'), { target: { value: 'Jane Doe' } });
+      // 'notanemail' has no @ so it fails the regex → shows "Invalid email address"
+      fireEvent.change(screen.getByPlaceholderText('email@company.com'), { target: { value: 'notanemail' } });
+      fireEvent.click(screen.getByText(/Create Contact/i));
+    });
     await waitFor(() => {
       expect(screen.getByText(/invalid email/i)).toBeInTheDocument();
     });
@@ -80,11 +82,11 @@ describe('ContactModal Component', () => {
   it('calls onSave with correct data on valid submit', async () => {
     mockOnSave.mockResolvedValueOnce({});
     renderModal();
-    
-    fireEvent.change(screen.getByPlaceholderText('John Doe'), { target: { value: 'Jane Doe' } });
-    fireEvent.change(screen.getByPlaceholderText('john@company.com'), { target: { value: 'jane@test.com' } });
-    fireEvent.click(screen.getByText('Add Contact'));
-
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('Full name'), { target: { value: 'Jane Doe' } });
+      fireEvent.change(screen.getByPlaceholderText('email@company.com'), { target: { value: 'jane@test.com' } });
+      fireEvent.click(screen.getByText(/Create Contact/i));
+    });
     await waitFor(() => {
       expect(mockOnSave).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'Jane Doe', email: 'jane@test.com', status: 'Lead' }),
@@ -95,12 +97,11 @@ describe('ContactModal Component', () => {
 
   it('calls onSave with contact id when editing', async () => {
     mockOnSave.mockResolvedValueOnce({});
-    const contact = { _id: 'abc123', name: 'Old Name', email: 'old@test.com', status: 'Lead' };
-    renderModal(contact);
-    
-    fireEvent.change(screen.getByDisplayValue('Old Name'), { target: { value: 'New Name' } });
-    fireEvent.click(screen.getByText('Save Changes'));
-
+    renderModal({ _id: 'abc123', name: 'Old Name', email: 'old@test.com', status: 'Lead' });
+    await act(async () => {
+      fireEvent.change(screen.getByDisplayValue('Old Name'), { target: { value: 'New Name' } });
+      fireEvent.click(screen.getByText(/Save Changes/i));
+    });
     await waitFor(() => {
       expect(mockOnSave).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'New Name' }),

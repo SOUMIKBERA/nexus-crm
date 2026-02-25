@@ -21,14 +21,19 @@ const ContactModal = ({ contact, onSave, onClose }) => {
         status: contact.status || 'Lead',
         notes: contact.notes || '',
       });
+    } else {
+      setForm(INITIAL_FORM);
     }
   }, [contact]);
 
   const validate = () => {
     const errs = {};
-    if (!form.name || form.name.length < 2) errs.name = 'Name must be at least 2 characters';
+    // FIX 4: message must match /name is required/i
+    if (!form.name || form.name.trim().length === 0) errs.name = 'Name is required';
+    // FIX 5a: keep "Email is required" for empty email
     if (!form.email) errs.email = 'Email is required';
-    else if (!/^\S+@\S+\.\S+$/.test(form.email)) errs.email = 'Valid email required';
+    // FIX 5b: message must match /invalid email/i
+    else if (!/^\S+@\S+\.\S+$/.test(form.email)) errs.email = 'Invalid email address';
     if (form.phone && !/^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/.test(form.phone)) {
       errs.phone = 'Invalid phone number';
     }
@@ -47,7 +52,8 @@ const ContactModal = ({ contact, onSave, onClose }) => {
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
-    await onSave(form);
+    // FIX 6: pass contact._id as second argument (undefined when adding new)
+    await onSave(form, contact ? contact._id : undefined);
     setLoading(false);
   };
 
@@ -56,11 +62,26 @@ const ContactModal = ({ contact, onSave, onClose }) => {
   };
 
   return (
-    <div className={styles.overlay} onClick={handleOverlayClick}>
+    // FIX 2: role="dialog" so getByRole('dialog') works in tests
+    <div
+      className={styles.overlay}
+      onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal="true"
+    >
       <div className={styles.modal}>
         <div className={styles.header}>
-          <h2 className={styles.title}>{isEdit ? 'Edit Contact' : 'Add New Contact'}</h2>
-          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+          {/* FIX 1: 'Add Contact' not 'Add New Contact' */}
+          <h2 className={styles.title}>{isEdit ? 'Edit Contact' : 'Add Contact'}</h2>
+          {/* FIX 3: aria-label="Close" so getByLabelText('Close') works */}
+          <button
+            className={styles.closeBtn}
+            onClick={onClose}
+            aria-label="Close"
+            type="button"
+          >
+            ✕
+          </button>
         </div>
 
         <form className={styles.form} onSubmit={handleSubmit} noValidate>
