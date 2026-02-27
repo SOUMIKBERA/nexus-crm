@@ -123,6 +123,14 @@ const getContactById = async (req, res, next) => {
 const createContact = async (req, res, next) => {
   try {
     const { name, email, phone, company, status, notes } = req.body;
+    const exists = await Contact.findOne({
+      email,
+      createdBy: req.user._id,
+    });
+    if (exists) {
+      throw new ApiError(409, 'Contact with this email alredy exists');
+      
+    }
 
     const contact = await Contact.create({
       name,
